@@ -196,8 +196,12 @@ function Workspace() {
     getSocket().emit(isTyping ? 'typing:start' : 'typing:stop', { channelId: channelIdNum });
   }
 
-  function handleRoleChanged(updated: ServerMember) {
-    setMembers((prev) => prev.map((m) => (m.userId === updated.userId ? { ...m, ...updated } : m)));
+  function handleRoleChanged() {
+    // A role change can touch two rows at once (ownership transfer demotes
+    // the old owner while promoting the new one), and can change *my own*
+    // role too — so refetch both instead of trying to patch state locally.
+    api.listMembers(serverIdNum).then(setMembers).catch(() => {});
+    api.listServers().then(setAllServers).catch(() => {});
   }
 
   if (loading || !server || !activeChannel || !user) {
