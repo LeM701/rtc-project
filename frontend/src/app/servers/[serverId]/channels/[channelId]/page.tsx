@@ -217,6 +217,7 @@ function Workspace() {
         activeChannelId={channelIdNum}
         myRole={myRole}
         onChannelCreated={(channel) => setChannels((prev) => [...prev, channel])}
+        onChannelDeleted={(deletedId) => setChannels((prev) => prev.filter((c) => c.id !== deletedId))}
       />
       <ChatPanel
         key={channelIdNum}
