@@ -15,21 +15,22 @@ export class AuthService {
   constructor(private userRepository: UserRepository) {}
 
   async signup(username: string, password: string): Promise<AuthResult> {
-    this.validateCredentials(username, password);
+    const trimmedUsername = (username || '').trim();
+    this.validateCredentials(trimmedUsername, password);
 
-    const existing = await this.userRepository.findByUsername(username);
+    const existing = await this.userRepository.findByUsername(trimmedUsername);
     if (existing) {
       throw new AppError(409, 'Ce nom d\'utilisateur est déjà pris');
     }
 
     const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
-    const user = await this.userRepository.create(username, passwordHash);
+    const user = await this.userRepository.create(trimmedUsername, passwordHash);
 
     return this.buildAuthResult(user.id, user.username, toPublicUser(user));
   }
 
   async login(username: string, password: string): Promise<AuthResult> {
-    const user = await this.userRepository.findByUsername(username);
+    const user = await this.userRepository.findByUsername((username || '').trim());
     if (!user) {
       throw new AppError(401, 'Identifiants invalides');
     }
