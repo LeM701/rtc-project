@@ -51,41 +51,75 @@ function Workspace() {
       api.getServer(serverIdNum),
       api.listChannels(serverIdNum),
       api.listMembers(serverIdNum),
-    ]).then(([servers, srv, chans, mems]) => {
-      if (cancelled) return;
-      setAllServers(servers);
-      setServer(srv);
-      setChannels(chans);
-      setMembers(mems);
-      setLoading(false);
-    });
+    ])
+      .then(([servers, srv, chans, mems]) => {
+        if (cancelled) return;
+        setAllServers(servers);
+        setServer(srv);
+        setChannels(chans);
+        setMembers(mems);
+        setLoading(false);
+      })
+      .catch(() => {
+        if (!cancelled) router.replace('/servers');
+      });
 
     return () => {
       cancelled = true;
     };
-  }, [serverIdNum]);
+  }, [serverIdNum, router]);
 
   // --- message history, refetched whenever the channel changes ---
   useEffect(() => {
     if (!channelIdNum) return;
-    api.listMessages(channelIdNum).then(setMessages);
-    setTyping({}); // clear stale typing state from the previous channel
-  }, [channelIdNum]);
+    let cancelled = false;
 
-  // --- socket: join the server room once we know the server ---
+    api
+      .listMessages(channelIdNum)
+      .then((msgs) => {
+        if (!cancelled) setMessages(msgs);
+      })
+      .catch(() => {
+        if (!cancelled) router.replace(`/servers/${serverIdNum}`);
+      });
+
+    setTyping({}); // clear stale typing state from the previous channel
+    return () => {
+      cancelled = true;
+    };
+  }, [channelIdNum, serverIdNum, router]);
+
+  // --- socket: join the server room, and re-join on every reconnect ---
   useEffect(() => {
     if (!serverIdNum) return;
     const socket = getSocket();
-    socket.emit('server:join', { serverId: serverIdNum });
+
+    function joinServerRoom() {
+      socket.emit('server:join', { serverId: serverIdNum });
+    }
+
+    joinServerRoom();
+    socket.on('connect', joinServerRoom);
+
+    return () => {
+      socket.off('connect', joinServerRoom);
+    };
   }, [serverIdNum]);
 
   // --- socket: join/leave the channel room as the active channel changes ---
   useEffect(() => {
     if (!channelIdNum) return;
     const socket = getSocket();
-    socket.emit('channel:join', { channelId: channelIdNum });
+
+    function joinChannelRoom() {
+      socket.emit('channel:join', { channelId: channelIdNum });
+    }
+
+    joinChannelRoom();
+    socket.on('connect', joinChannelRoom);
 
     return () => {
+      socket.off('connect', joinChannelRoom);
       socket.emit('channel:leave', { channelId: channelIdNum });
     };
   }, [channelIdNum]);
@@ -109,7 +143,7 @@ function Workspace() {
       setMessages((prev) => prev.filter((m) => m.id !== payload.messageId));
     }
 
-    function handleTypingUpdate(payload: { channelId: number; userId: number; username: string; isTyping: boolean }) {
+    function handleTypingUpdate(payload: { channelId: number; userId: number; username: string; isTyping:boolean }) {
       if (payload.channelId !== channelIdNum) return;
       setTyping((prev) => {
         const next = { ...prev };
@@ -143,11 +177,19 @@ function Workspace() {
   );
 
   async function handleSend(content: string) {
-    await api.sendMessage(channelIdNum, content); // the new message arrives back via 'message:new'
+    try {
+      await api.sendMessage(channelIdNum, content); // the new message arrives back via 'message:new'
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Erreur lors de l'envoi du message");
+    }
   }
 
   async function handleDelete(messageId: number) {
-    await api.deleteMessage(messageId); // removal arrives back via 'message:deleted'
+    try {
+      await api.deleteMessage(messageId); // removal arrives back via 'message:deleted'
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Erreur lors de la suppression');
+    }
   }
 
   function handleTypingChange(isTyping: boolean) {
@@ -173,6 +215,7 @@ function Workspace() {
         onChannelCreated={(channel) => setChannels((prev) => [...prev, channel])}
       />
       <ChatPanel
+        key={channelIdNum}
         channelId={channelIdNum}
         channelName={activeChannel.name}
         messages={messages}
