@@ -1,12 +1,10 @@
 'use client';
-
 import { useEffect, useState, FormEvent } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { RequireAuth } from '@/components/RequireAuth';
 import { ServerRail } from '@/components/ServerRail';
 import { api, ApiError } from '@/lib/api';
 import { ServerWithRole } from '@/lib/types';
-
 function ServerLanding() {
   const { serverId } = useParams<{ serverId: string }>();
   const router = useRouter();
@@ -14,32 +12,30 @@ function ServerLanding() {
   const [checking, setChecking] = useState(true);
   const [channelName, setChannelName] = useState('');
   const [error, setError] = useState<string | null>(null);
-
   useEffect(() => {
     let cancelled = false;
-
     async function run() {
-      const [allServers, channels] = await Promise.all([
-        api.listServers(),
-        api.listChannels(Number(serverId)),
-      ]);
-      if (cancelled) return;
-
-      setServers(allServers);
-
-      if (channels.length > 0) {
-        router.replace(`/servers/${serverId}/channels/${channels[0].id}`);
-      } else {
-        setChecking(false);
+      try {
+        const [allServers, channels] = await Promise.all([
+          api.listServers(),
+          api.listChannels(Number(serverId)),
+        ]);
+        if (cancelled) return;
+        setServers(allServers);
+        if (channels.length > 0) {
+          router.replace(`/servers/${serverId}/channels/${channels[0].id}`);
+        } else {
+          setChecking(false);
+        }
+      } catch {
+        if (!cancelled) router.replace('/servers');
       }
     }
-
     run();
     return () => {
       cancelled = true;
     };
   }, [serverId, router]);
-
   async function handleCreateChannel(e: FormEvent) {
     e.preventDefault();
     setError(null);
@@ -50,14 +46,11 @@ function ServerLanding() {
       setError(err instanceof ApiError ? err.message : 'Erreur lors de la création du channel');
     }
   }
-
   if (checking) {
     return <div className="flex h-screen items-center justify-center bg-base text-textDim">Chargement...</div>;
   }
-
   const myRole = servers.find((s) => s.id === Number(serverId))?.myRole;
   const canCreateChannel = myRole === 'owner' || myRole === 'admin';
-
   return (
     <div className="flex h-screen bg-base">
       <ServerRail servers={servers} activeServerId={Number(serverId)} />
@@ -88,7 +81,6 @@ function ServerLanding() {
     </div>
   );
 }
-
 export default function ServerPage() {
   return (
     <RequireAuth>
