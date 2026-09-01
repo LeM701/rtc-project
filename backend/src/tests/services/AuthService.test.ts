@@ -2,9 +2,6 @@ import { AuthService } from '../../services/AuthService';
 import { UserRepository } from '../../repositories/UserRepository';
 import { User } from '../../models/User';
 
-// Fake repository: same shape as UserRepository, but backed by an in-memory
-// array instead of Postgres. This is exactly what "test without a database"
-// (subject, page 4) looks like in practice.
 class FakeUserRepository {
   private users: User[] = [];
   private nextId = 1;
@@ -80,5 +77,29 @@ describe('AuthService', () => {
     await expect(service.login('ghost', 'password123')).rejects.toThrow(
       'Identifiants invalides'
     );
+  });
+
+  it('trims whitespace from the username on signup, so it cannot bypass uniqueness', async () => {
+    const service = buildService();
+    await service.signup('alice', 'password123');
+
+    await expect(service.signup('  alice  ', 'other-password')).rejects.toThrow(
+      "Ce nom d'utilisateur est déjà pris"
+    );
+  });
+
+  it('stores the trimmed username, not the raw input with whitespace', async () => {
+    const service = buildService();
+    const result = await service.signup('  bob  ', 'password123');
+
+    expect(result.user.username).toBe('bob');
+  });
+
+  it('logs in even if the username has stray whitespace', async () => {
+    const service = buildService();
+    await service.signup('alice', 'password123');
+
+    const result = await service.login('  alice  ', 'password123');
+    expect(result.user.username).toBe('alice');
   });
 });
