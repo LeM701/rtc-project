@@ -51,8 +51,12 @@ export class ChatSocketServer implements RealtimeGateway {
     const userId: number = socket.data.user.userId;
     this.presence.registerConnection(userId);
 
-    socket.on('server:join', (payload: { serverId: number }) => this.handleServerJoin(socket, payload));
-    socket.on('channel:join', (payload: { channelId: number }) => this.handleChannelJoin(socket, payload));
+    socket.on('server:join', (payload: { serverId: number }, ack?: () => void) =>
+      this.handleServerJoin(socket, payload, ack)
+    );
+    socket.on('channel:join', (payload: { channelId: number }, ack?: () => void) =>
+      this.handleChannelJoin(socket, payload, ack)
+    );
     socket.on('channel:leave', (payload: { channelId: number }) => {
       socket.leave(`channel:${payload.channelId}`);
     });
@@ -61,7 +65,7 @@ export class ChatSocketServer implements RealtimeGateway {
     socket.on('disconnect', () => this.handleDisconnect(socket));
   };
 
-  private handleServerJoin = async (socket: Socket, { serverId }: { serverId: number }) => {
+  private handleServerJoin = async (socket: Socket, { serverId }: { serverId: number }, ack?: () => void) => {
     const userId: number = socket.data.user.userId;
     try {
       await this.permissions.requireMembership(serverId, userId);
@@ -73,9 +77,10 @@ export class ChatSocketServer implements RealtimeGateway {
     socket.join(`server:${serverId}`);
     this.presence.addToServer(userId, serverId);
     this.broadcastPresence(serverId);
+    ack?.();
   };
 
-  private handleChannelJoin = async (socket: Socket, { channelId }: { channelId: number }) => {
+  private handleChannelJoin = async (socket: Socket, { channelId }: { channelId: number }, ack?: () => void) => {
     try {
       await this.verifyChannelMembership(channelId, socket.data.user.userId);
     } catch {
@@ -83,6 +88,7 @@ export class ChatSocketServer implements RealtimeGateway {
       return;
     }
     socket.join(`channel:${channelId}`);
+    ack?.();
   };
 
   private handleTyping = async (socket: Socket, { channelId }: { channelId: number }, isTyping: boolean) => {
