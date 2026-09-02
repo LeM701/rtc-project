@@ -165,26 +165,37 @@ Authentification par cookie JWT, gestion des rooms serveur/channel, presence en 
 ```mermaid
 sequenceDiagram
     participant C as Client
-    participant S as Serveur
-    participant O as Autres clients
+    participant S as Serveur (Socket.IO)
+    participant O as Autres clients (meme channel)
 
-    C->>S: handshake avec cookie JWT
+    Note over C, O: Connexion et authentification
+    C->>S: handshake (cookie JWT)
     S-->>C: connect
-    C->>S: server:join
-    S-->>O: presence:update
-    C->>S: channel:join avec accuse de reception
+
+    Note over C, O: Rejoindre les salons
+    C->>S: server:join { serverId }
+    S-->>O: presence:update { onlineUserIds }
+    C->>S: channel:join { channelId }
     S-->>C: ack
-    C->>S: typing:start
-    S->>O: typing:update
-    C->>S: message:send
-    S-->>C: ack
-    S->>C: message:new
-    S->>O: message:new
-    C->>S: DELETE messages id
-    S->>C: message:deleted
-    S->>O: message:deleted
+
+    Note over C, O: Typing en cours
+    C->>S: typing:start { channelId }
+    S->>O: typing:update { userId, isTyping: true }
+
+    Note over C, O: Envoi de message
+    C->>S: message:send { channelId, content }
+    S-->>C: ack (message cree)
+    S->>C: message:new { id, content, authorId }
+    S->>O: message:new { id, content, authorId }
+
+    Note over C, O: Suppression de message
+    C->>S: DELETE /messages/:id
+    S->>C: message:deleted { messageId }
+    S->>O: message:deleted { messageId }
+
+    Note over C, O: Deconnexion
     C--xS: disconnect
-    S-->>O: presence:update
+    S-->>O: presence:update { onlineUserIds }
 ```
 
 Detail complet : backend/docs/websocket-events.md
