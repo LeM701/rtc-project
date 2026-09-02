@@ -88,23 +88,34 @@ describe('Workspace (channel page) — full integration', () => {
     expect(screen.getByTitle('Epitech Promo')).toBeInTheDocument();
   });
 
-  it('sends a message through the API when submitting the chat input (ChatPanel)', async () => {
+  it('sends a message via the WebSocket when submitting the chat input (ChatPanel)', async () => {
+    mockHappyPath();
+    render(<ChannelPage />);
+    const input = await screen.findByPlaceholderText('Écrire dans #general');
+    await userEvent.type(input, 'hello{Enter}');
+    await waitFor(() =>
+      expect(fakeSocket.emit).toHaveBeenCalledWith('message:send', { channelId: 10, content: 'hello' })
+    );
+  });
+
+  it('shows an error alert when the server rejects a socket-sent message', async () => {
+    mockHappyPath();
+    window.alert = jest.fn();
+    render(<ChannelPage />);
+    await screen.findByPlaceholderText('Écrire dans #general');
+    fakeSocket.__trigger('error', { message: 'Le message ne peut pas être vide' });
+    await waitFor(() => expect(window.alert).toHaveBeenCalledWith('Le message ne peut pas être vide'));
+  });
+
+  it('falls back to the REST API when the socket is not connected', async () => {
     mockHappyPath();
     mockSendMessage.mockResolvedValue({ id: 1, channelId: 10, authorId: 1, content: 'hello', createdAt: '' });
+    fakeSocket.connected = false;
     render(<ChannelPage />);
     const input = await screen.findByPlaceholderText('Écrire dans #general');
     await userEvent.type(input, 'hello{Enter}');
     await waitFor(() => expect(mockSendMessage).toHaveBeenCalledWith(10, 'hello'));
-  });
-
-  it('shows an error alert if sending a message fails', async () => {
-    mockHappyPath();
-    mockSendMessage.mockRejectedValue(new Error('network down'));
-    window.alert = jest.fn();
-    render(<ChannelPage />);
-    const input = await screen.findByPlaceholderText('Écrire dans #general');
-    await userEvent.type(input, 'hello{Enter}');
-    await waitFor(() => expect(window.alert).toHaveBeenCalled());
+    fakeSocket.connected = true; // restore for the remaining tests in this file
   });
 
   it('appends a message received over the socket, for the active channel', async () => {
