@@ -12,12 +12,14 @@ Application de chat en temps réel avec serveurs, channels, gestion des rôles e
 ```mermaid
 graph TD
     User((Utilisateur)) --> NextJS[Next.js Frontend]
-    NextJS -- "Requetes HTTP JSON" --> Express[Express.js API]
-    NextJS -- "WebSocket" --> Socket[Socket.IO Server]
-    Express -- "Requetes SQL" --> Postgres[(PostgreSQL / Supabase)]
-    Socket -- "Requetes SQL" --> Postgres
-    Postgres -- "Donnees" --> Express
-    Express -- "Reponse JSON" --> NextJS
+    NextJS -- "Requetes HTTP JSON" --> Backend
+    NextJS -- "WebSocket" --> Backend
+    subgraph Backend[Backend Node.js]
+        Express[Express API]
+        Socket[Socket.IO Server]
+    end
+    Backend -- "Requetes SQL" --> Postgres[(PostgreSQL / Supabase)]
+    Postgres -- "Donnees" --> Backend
 ```
 
 ## Structure
