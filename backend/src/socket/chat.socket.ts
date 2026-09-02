@@ -5,9 +5,11 @@ import { env } from '../config/env';
 import { verifyToken } from '../utils/jwt';
 import { parseCookie } from '../utils/parseCookie';
 import { ChannelRepository } from '../repositories/ChannelRepository';
+import { MessageRepository } from '../repositories/MessageRepository';
 import { ServerMemberRepository } from '../repositories/ServerMemberRepository';
 import { PermissionService } from '../services/PermissionService';
 import { PresenceService } from '../services/PresenceService';
+import { MessageService } from '../services/MessageService';
 import { RealtimeGateway } from './RealtimeGateway';
 import { Message } from '../models/Message';
 import { Channel } from '../models/Channel';
@@ -17,13 +19,19 @@ export class ChatSocketServer implements RealtimeGateway {
   private presence = new PresenceService();
   private permissions: PermissionService;
   private channelRepository: ChannelRepository;
+  private messageService: MessageService;
 
   constructor(httpServer: http.Server, db: Pool) {
     this.io = new SocketIOServer(httpServer, {
       cors: { origin: env.clientUrl, credentials: true },
     });
-    this.permissions = new PermissionService(new ServerMemberRepository(db));
+    const memberRepository = new ServerMemberRepository(db);
+    this.permissions = new PermissionService(memberRepository);
     this.channelRepository = new ChannelRepository(db);
+    // Reuses the same MessageService logic (permissions, validation, persistence)
+    // as the REST endpoint — `this` is passed as the RealtimeGateway so a
+    // socket-originated message broadcasts exactly like a REST-originated one.
+    this.messageService = new MessageService(new MessageRepository(db), this.channelRepository, memberRepository, this);
 
     this.io.use(this.authenticate);
     this.io.on('connection', this.handleConnection);
@@ -62,6 +70,9 @@ export class ChatSocketServer implements RealtimeGateway {
     });
     socket.on('typing:start', (payload: { channelId: number }) => this.handleTyping(socket, payload, true));
     socket.on('typing:stop', (payload: { channelId: number }) => this.handleTyping(socket, payload, false));
+    socket.on('message:send', (payload: { channelId: number; content: string }, ack?: (message?: Message) => void) =>
+      this.handleMessageSend(socket, payload, ack)
+    );
     socket.on('disconnect', () => this.handleDisconnect(socket));
   };
 
@@ -105,6 +116,22 @@ export class ChatSocketServer implements RealtimeGateway {
       username: socket.data.user.username,
       isTyping,
     });
+  };
+
+  // Optional entry point in addition to POST /channels/:id/messages — same
+  // MessageService underneath, so persistence and permission checks are
+  // identical regardless of which path a client chooses to send through.
+  private handleMessageSend = async (
+    socket: Socket,
+    { channelId, content }: { channelId: number; content: string },
+    ack?: (message?: Message) => void
+  ) => {
+    try {
+      const message = await this.messageService.sendMessage(channelId, socket.data.user.userId, content);
+      ack?.(message);
+    } catch (err) {
+      socket.emit('error', { message: err instanceof Error ? err.message : "Erreur lors de l'envoi du message" });
+    }
   };
 
   private handleDisconnect = (socket: Socket) => {
