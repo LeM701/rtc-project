@@ -1,6 +1,6 @@
 import dotenv from 'dotenv';
 
-dotenv.config();
+dotenv.config({ quiet: true });
 
 process.env.DATABASE_URL =
   process.env.TEST_DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/rtc_test';
