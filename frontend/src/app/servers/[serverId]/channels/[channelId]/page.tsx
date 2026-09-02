@@ -158,16 +158,22 @@ function Workspace() {
       setOnlineUserIds(payload.onlineUserIds);
     }
 
+    function handleSocketError(payload: { message: string }) {
+      alert(payload.message);
+    }
+
     socket.on('message:new', handleNewMessage);
     socket.on('message:deleted', handleMessageDeleted);
     socket.on('typing:update', handleTypingUpdate);
     socket.on('presence:update', handlePresenceUpdate);
+    socket.on('error', handleSocketError);
 
     return () => {
       socket.off('message:new', handleNewMessage);
       socket.off('message:deleted', handleMessageDeleted);
       socket.off('typing:update', handleTypingUpdate);
       socket.off('presence:update', handlePresenceUpdate);
+      socket.off('error', handleSocketError);
     };
   }, [channelIdNum, serverIdNum]);
 
@@ -177,8 +183,19 @@ function Workspace() {
   );
 
   async function handleSend(content: string) {
+    const socket = getSocket();
+    if (socket.connected) {
+      // Preferred path: WebSocket. The new message still arrives back for
+      // everyone (sender included) via 'message:new', broadcast by the
+      // server after it persists it — errors surface via the 'error' event
+      // handled above, same as other socket actions in this file.
+      socket.emit('message:send', { channelId: channelIdNum, content });
+      return;
+    }
+    // Fallback if the socket isn't connected yet: same MessageService
+    // underneath, reached through the REST endpoint instead.
     try {
-      await api.sendMessage(channelIdNum, content); // the new message arrives back via 'message:new'
+      await api.sendMessage(channelIdNum, content);
     } catch (err) {
       alert(err instanceof Error ? err.message : "Erreur lors de l'envoi du message");
     }
@@ -196,8 +213,12 @@ function Workspace() {
     getSocket().emit(isTyping ? 'typing:start' : 'typing:stop', { channelId: channelIdNum });
   }
 
-  function handleRoleChanged(updated: ServerMember) {
-    setMembers((prev) => prev.map((m) => (m.userId === updated.userId ? { ...m, ...updated } : m)));
+  function handleRoleChanged() {
+    // A role change can touch two rows at once (ownership transfer demotes
+    // the old owner while promoting the new one), and can change *my own*
+    // role too — so refetch both instead of trying to patch state locally.
+    api.listMembers(serverIdNum).then(setMembers).catch(() => {});
+    api.listServers().then(setAllServers).catch(() => {});
   }
 
   if (loading || !server || !activeChannel || !user) {
@@ -213,6 +234,7 @@ function Workspace() {
         activeChannelId={channelIdNum}
         myRole={myRole}
         onChannelCreated={(channel) => setChannels((prev) => [...prev, channel])}
+        onChannelDeleted={(deletedId) => setChannels((prev) => prev.filter((c) => c.id !== deletedId))}
       />
       <ChatPanel
         key={channelIdNum}
