@@ -1,50 +1,43 @@
 'use client';
-
 import { useState } from 'react';
 import { ServerMember, ServerRole } from '@/lib/types';
-import { api } from '@/lib/api';
-
+import { api, ApiError } from '@/lib/api';
 interface MembersPanelProps {
   serverId: number;
   members: ServerMember[];
   onlineUserIds: number[];
   myRole: ServerRole;
   currentUserId: number;
-  onRoleChanged: (member: ServerMember) => void;
+  onRoleChanged: () => void;
 }
-
 const ROLE_LABELS: Record<ServerRole, string> = {
   owner: 'Owner',
   admin: 'Admin',
   member: 'Member',
 };
-
 export function MembersPanel({ serverId, members, onlineUserIds, myRole, currentUserId, onRoleChanged }: MembersPanelProps) {
   const [pendingUserId, setPendingUserId] = useState<number | null>(null);
-
   async function handleRoleChange(userId: number, role: ServerRole) {
     setPendingUserId(userId);
     try {
-      const updated = await api.updateMemberRole(serverId, userId, role);
-      onRoleChanged(updated);
+      await api.updateMemberRole(serverId, userId, role);
+      onRoleChanged();
+    } catch (err) {
+      alert(err instanceof ApiError ? err.message : 'Erreur lors du changement de rôle');
     } finally {
       setPendingUserId(null);
     }
   }
-
   const sorted = [...members].sort((a, b) => a.role.localeCompare(b.role));
-
   return (
     <div className="w-56 border-l border-border bg-panel p-3">
       <h2 className="mb-2 px-1 text-xs font-medium uppercase tracking-wide text-textDim">
         Membres — {members.length}
       </h2>
-
       <ul className="flex flex-col gap-1">
         {sorted.map((member) => {
           const online = onlineUserIds.includes(member.userId);
           const isSelf = member.userId === currentUserId;
-
           return (
             <li key={member.userId} className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-panelAlt/60">
               <span className={`h-2 w-2 shrink-0 rounded-full ${online ? 'bg-online' : 'bg-border'}`} />
@@ -52,7 +45,6 @@ export function MembersPanel({ serverId, members, onlineUserIds, myRole, current
                 {member.username}
                 {isSelf && <span className="text-textDim"> (toi)</span>}
               </span>
-
               {myRole === 'owner' && !isSelf ? (
                 <select
                   value={member.role}
