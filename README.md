@@ -9,14 +9,16 @@ Application de chat en temps réel avec serveurs, channels, gestion des rôles e
 
 ## Architecture
 
-    graph TD
-        User((Utilisateur)) --> NextJS[Next.js Frontend]
-        NextJS -- "Requetes HTTP JSON" --> Express[Express.js API]
-        NextJS -- "WebSocket" --> Socket[Socket.IO Server]
-        Express -- "Requetes SQL" --> Postgres[(PostgreSQL / Supabase)]
-        Socket -- "Requetes SQL" --> Postgres
-        Postgres -- "Donnees" --> Express
-        Express -- "Reponse JSON" --> NextJS
+```mermaid
+graph TD
+    User((Utilisateur)) --> NextJS[Next.js Frontend]
+    NextJS -- "Requetes HTTP JSON" --> Express[Express.js API]
+    NextJS -- "WebSocket" --> Socket[Socket.IO Server]
+    Express -- "Requetes SQL" --> Postgres[(PostgreSQL / Supabase)]
+    Socket -- "Requetes SQL" --> Postgres
+    Postgres -- "Donnees" --> Express
+    Express -- "Reponse JSON" --> NextJS
+```
 
 ## Structure
 
@@ -158,28 +160,30 @@ Dans les deux cas, le message est ensuite diffuse a tous les clients du channel,
 
 Authentification par cookie JWT, gestion des rooms serveur/channel, presence en ligne, indicateur de frappe.
 
-    sequenceDiagram
-        participant C as Client
-        participant S as Serveur
-        participant O as Autres clients
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant S as Serveur
+    participant O as Autres clients
 
-        C->>S: handshake avec cookie JWT
-        S-->>C: connect
-        C->>S: server:join
-        S-->>O: presence:update
-        C->>S: channel:join (avec accuse de reception)
-        S-->>C: ack
-        C->>S: typing:start
-        S->>O: typing:update
-        C->>S: message:send
-        S-->>C: ack (message cree)
-        S->>C: message:new
-        S->>O: message:new
-        C->>S: DELETE /messages/:id
-        S->>C: message:deleted
-        S->>O: message:deleted
-        C--xS: disconnect
-        S-->>O: presence:update
+    C->>S: handshake avec cookie JWT
+    S-->>C: connect
+    C->>S: server:join
+    S-->>O: presence:update
+    C->>S: channel:join avec accuse de reception
+    S-->>C: ack
+    C->>S: typing:start
+    S->>O: typing:update
+    C->>S: message:send
+    S-->>C: ack
+    S->>C: message:new
+    S->>O: message:new
+    C->>S: DELETE messages id
+    S->>C: message:deleted
+    S->>O: message:deleted
+    C--xS: disconnect
+    S-->>O: presence:update
+```
 
 Detail complet : backend/docs/websocket-events.md
 
