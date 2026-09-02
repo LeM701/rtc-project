@@ -125,6 +125,42 @@ describe('WebSocket (integration)', () => {
     expect(message.content).toBe('hello from REST');
   });
 
+  it('broadcasts message:new to everyone when a message is sent via the socket', async () => {
+    const { owner, member, channelId } = await setupServerWithMember();
+    const ownerSocket = connectSocket(server.port, owner.cookieHeader);
+    const memberSocket = connectSocket(server.port, member.cookieHeader);
+    openSockets.push(ownerSocket, memberSocket);
+    await Promise.all([waitForEvent(ownerSocket, 'connect'), waitForEvent(memberSocket, 'connect')]);
+    await Promise.all([
+      joinAndWaitForAck(ownerSocket, 'channel:join', { channelId }),
+      joinAndWaitForAck(memberSocket, 'channel:join', { channelId }),
+    ]);
+    const receivedByMember = waitForEvent<{ content: string }>(memberSocket, 'message:new');
+    const receivedByOwner = waitForEvent<{ content: string }>(ownerSocket, 'message:new');
+    const sentMessage = await new Promise<{ content: string }>((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error('Timed out waiting for message:send ack')), 4000);
+      ownerSocket.emit('message:send', { channelId, content: 'hello via socket' }, (message: any) => {
+        clearTimeout(timer);
+        resolve(message);
+      });
+    });
+    expect(sentMessage.content).toBe('hello via socket');
+    expect((await receivedByMember).content).toBe('hello via socket');
+    expect((await receivedByOwner).content).toBe('hello via socket');
+  });
+
+  it('rejects an empty message sent via the socket with an error event', async () => {
+    const { owner, channelId } = await setupServerWithMember();
+    const ownerSocket = connectSocket(server.port, owner.cookieHeader);
+    openSockets.push(ownerSocket);
+    await waitForEvent(ownerSocket, 'connect');
+    await joinAndWaitForAck(ownerSocket, 'channel:join', { channelId });
+    const errorEvent = waitForEvent<{ message: string }>(ownerSocket, 'error');
+    ownerSocket.emit('message:send', { channelId, content: '   ' });
+    const payload = await errorEvent;
+    expect(payload.message).toMatch(/vide/);
+  });
+
   it('broadcasts message:deleted to the channel when a message is deleted via REST', async () => {
     const { owner, member, channelId } = await setupServerWithMember();
     const sendRes = await request(server.app).post(`/api/channels/${channelId}/messages`).set('Cookie', owner.cookieHeader).send({ content: 'to be deleted' });
