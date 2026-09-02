@@ -164,38 +164,29 @@ Authentification par cookie JWT, gestion des rooms serveur/channel, presence en 
 
 ```mermaid
 sequenceDiagram
-    participant C as Client
+    participant C as Client (User 12)
     participant S as Serveur (Socket.IO)
-    participant O as Autres clients (meme channel)
-
+    participant O as Autres clients (Channel 5)
     Note over C, O: Connexion et authentification
     C->>S: handshake (cookie JWT)
     S-->>C: connect
-
     Note over C, O: Rejoindre les salons
-    C->>S: server:join { serverId }
-    S-->>O: presence:update { onlineUserIds }
-    C->>S: channel:join { channelId }
+    C->>S: server:join { serverId: 1 }
+    S-->>O: presence:update { onlineUserIds: [12] }
+    C->>S: channel:join { channelId: 5 }
     S-->>C: ack
-
     Note over C, O: Typing en cours
-    C->>S: typing:start { channelId }
-    S->>O: typing:update { userId, isTyping: true }
-
+    C->>S: typing:start { channelId: 5 }
+    S->>O: typing:update { userId: 12, isTyping: true }
     Note over C, O: Envoi de message
-    C->>S: message:send { channelId, content }
-    S-->>C: ack (message cree)
-    S->>C: message:new { id, content, authorId }
-    S->>O: message:new { id, content, authorId }
-
+    C->>S: message:send { channelId: 5, content: "Salut" }
+    S-->>C: ack { id: 42, content: "Salut" }
+    S->>C: message:new { id: 42, content: "Salut", authorId: 12 }
+    S->>O: message:new { id: 42, content: "Salut", authorId: 12 }
     Note over C, O: Suppression de message
-    C->>S: DELETE /messages/:id
-    S->>C: message:deleted { messageId }
-    S->>O: message:deleted { messageId }
-
-    Note over C, O: Deconnexion
-    C--xS: disconnect
-    S-->>O: presence:update { onlineUserIds }
+    C->>S: DELETE /messages/42
+    S->>C: message:deleted { messageId: 42 }
+    S->>O: message:deleted { messageId: 42 }
 ```
 
 Detail complet : backend/docs/websocket-events.md
